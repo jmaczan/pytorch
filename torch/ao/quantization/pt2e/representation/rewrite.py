@@ -92,18 +92,15 @@ def _reference_quantized_linear(
         weight_i16 - weight_zero_point,
         None,
     )
-    # TODO: change to mul.Scalar
-    # Note: we are quantizing bias with these scales without signal from user, but it might be OK
-    bias_scale = x_scale * weight_scale
+    bias_scale = torch.ops.aten.mul.Scalar(x_scale, weight_scale)
     bias_i32 = out_dtype(torch.ops.aten.div.Tensor, torch.int32, bias_fp32, bias_scale)
     acc_i32 = acc_i32 + bias_i32
-    # TODO: change to mul.Scalar when we make x_scale/weight_scale etc. Scalar values
     acc_i32 = (
         out_dtype(
             torch.ops.aten.mul.Tensor,
             torch.int32,
             acc_i32,
-            x_scale * weight_scale / out_scale,
+            bias_scale / out_scale,
         )
         + out_zero_point
     )
@@ -289,7 +286,7 @@ def _reference_quantized_conv2d(
         groups,
     )
     # Note: we are quantizing bias with these scales without signal from user, but it might be OK
-    bias_scale = x_scale * weight_scale
+    bias_scale = torch.ops.aten.mul.Scalar(x_scale, weight_scale)
     # bias quantization to int32 uses bias_scale = x_scale * weight_scale due to:
     # Take linear calculation for example
     # Out_(i, j)_fp32 = Sum_(over k)[X_(i, k)_fp32 * W_(i, k)_fp32] + bias_(i)_fp32
@@ -310,7 +307,6 @@ def _reference_quantized_conv2d(
     bias_i32 = bias_i32.unsqueeze(-1)
     bias_i32 = bias_i32.unsqueeze(-1)
     acc_i32 = acc_i32 + bias_i32
-    # TODO: change to mul.Scalar when we make x_scale/weight_scale etc. Scalar values
     acc_i32 = (
         out_dtype(
             torch.ops.aten.mul.Tensor,
