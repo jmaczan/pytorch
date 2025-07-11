@@ -181,10 +181,10 @@ def _reference_dynamic_quantized_linear(
         weight_i16 - weight_zero_point,
         None,
     )
-    bias_scale = x_scale * weight_scale
+    bias_scale = torch.ops.aten.mul.Scalar(x_scale, weight_scale)
     bias_i32 = out_dtype(torch.ops.aten.div.Tensor, torch.int32, bias_fp32, bias_scale)
     acc_i32 = acc_i32 + bias_i32
-    out_fp32 = acc_i32 * (x_scale * weight_scale)
+    out_fp32 = acc_i32 * (bias_scale)
     return out_fp32
 
 
@@ -312,7 +312,7 @@ def _reference_quantized_conv2d(
             torch.ops.aten.mul.Tensor,
             torch.int32,
             acc_i32,
-            x_scale * weight_scale / out_scale,
+            bias_scale / out_scale,
         )
         + out_zero_point
     )
