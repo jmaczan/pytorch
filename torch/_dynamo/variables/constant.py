@@ -292,3 +292,15 @@ class EnumVariable(VariableTracker):
         member = getattr(self.value, name)
         source = self.source and AttrSource(self.source, name)
         return VariableTracker.build(tx, member, source=source)
+
+
+class NotReconstructableIntVariable(ConstantVariable):
+    def __init__(self, value: int, **kwargs):
+        assert isinstance(value, int)
+        super().__init__(value, **kwargs)
+
+    def python_type(self):
+        return int
+
+    def reconstruct(self, *args, **kwargs):
+        raise NotImplementedError("This variable is not reconstructable")

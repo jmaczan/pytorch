@@ -2624,16 +2624,7 @@ class BuiltinVariable(VariableTracker):
         elif istype(args[0], variables.FunctoolsPartialVariable):
             return variables.ConstantVariable.create(id(args[0].fake_value))
         else:
-            unimplemented_v2(
-                gb_type="id() with unsupported args",
-                context=str(args),
-                explanation=f"Dynamo doesn't know how to trace id() call with args {args}",
-                hints=[
-                    "Supported args are Tensors, and functions/nn.Modules/user-defined objects "
-                    "from outside the compiled region.",
-                    *graph_break_hints.SUPPORTABLE,
-                ],
-            )
+            return variables.constant.NotReconstructableIntVariable.create(id(args[0]))
 
     def call_deepcopy(self, tx: "InstructionTranslator", x):
         unimplemented_v2(
