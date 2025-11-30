@@ -1518,6 +1518,63 @@ def addmm(match, mat1, mat2, *, inp):
     match.replace_by_example(repl, [inp, mat1, mat2])
 
 
+def is_valid_mul_trailing_constant_pad(match: Match):
+    x = match.args[0]
+    pad = match.kwargs["pad"]
+
+    if not (
+        isinstance(x, torch.fx.Node)
+        and hasattr(x, "meta")
+        and "val" in x.meta
+        and isinstance(x.meta["val"], torch.Tensor)
+        and x.meta["val"].dim() >= 1
+        and x.target in [aten.mul.Tensor, aten.mul_.Tensor]
+        and isinstance(pad, (list, tuple))
+        and len(pad) == 2
+        and pad[0] == 0
+        and pad[1] >= 0
+        # TODO(jmaczan): make it more general, right now it works on 1D trailing pad
+        # fixes https://github.com/pytorch/pytorch/issues/164041
+    ):
+        return False
+
+    return True
+
+
+@register_graph_pattern(
+    CallFunction(
+        aten.constant_pad_nd.default,
+        Arg(),
+        pad=KeywordArg("pad"),
+        value=KeywordArg("value"),
+    ),
+    # pyrefly: ignore [bad-argument-type]
+    pass_dict=pass_patterns[2],
+    extra_check=is_valid_mul_trailing_constant_pad,
+)
+def mul_pad_fusable_replacement(match: Match, x, *, pad, value):
+    def repl(x_tensor, pad, value):
+        shape = list(x_tensor.shape)
+        pad_count = pad[-1]
+        pad_shape = shape.copy()
+        pad_shape[-1] = pad_count
+
+        new_pad = aten.full.default(
+            pad_shape,
+            value,
+            dtype=x_tensor.dtype,
+            device=x_tensor.device,
+            pin_memory=False,
+        )
+
+        return aten.cat.default((x_tensor, new_pad), dim=-1)
+
+    # only replace the output node, not all nodes
+    match.nodes = [match.output_node()]
+    # pyrefly: ignore [bad-argument-type]
+    match.replace_by_example(repl, [x, pad, value])
+
+
 def register_partial_reduction_pattern():
     "Reuse partial reductions in complete reductions"
 
