@@ -1519,8 +1519,7 @@ def addmm(match, mat1, mat2, *, inp):
 
 
 def is_valid_mul_trailing_constant_pad(match: Match):
-    x = match.args[0]
-    pad = match.kwargs["pad"]
+    x, pad, value = match.args
 
     if not (
         isinstance(x, torch.fx.Node)
@@ -1532,7 +1531,6 @@ def is_valid_mul_trailing_constant_pad(match: Match):
         and isinstance(pad, (list, tuple))
         and len(pad) == 2
         and pad[0] == 0
-        and pad[1] >= 0
         # TODO(jmaczan): make it more general, right now it works on 1D trailing pad
         # fixes https://github.com/pytorch/pytorch/issues/164041
     ):
@@ -1542,17 +1540,16 @@ def is_valid_mul_trailing_constant_pad(match: Match):
 
 
 @register_graph_pattern(
-    CallFunction(
+    CallFunctionVarArgs(
         aten.constant_pad_nd.default,
-        Arg(),
-        pad=KeywordArg("pad"),
-        value=KeywordArg("value"),
     ),
     # pyrefly: ignore [bad-argument-type]
     pass_dict=pass_patterns[2],
     extra_check=is_valid_mul_trailing_constant_pad,
 )
-def mul_pad_fusable_replacement(match: Match, x, *, pad, value):
+def mul_pad_fusable_replacement(match: Match, self, pad, value):
+    x = self
+
     def repl(x_tensor, pad, value):
         shape = list(x_tensor.shape)
         pad_count = pad[-1]
