@@ -1519,14 +1519,21 @@ def addmm(match, mat1, mat2, *, inp):
 
 
 def is_valid_mul_trailing_constant_pad(match: Match):
-    x, pad, value = match.args
+    node = match.output_node()
+
+    if not (node.op == "call_function" and node.target == aten.constant_pad_nd.default):
+        return False
+
+    if node.args:
+        x = node.args[0]
+        pad = node.args[1]
+    else:
+        x = node.kwargs["self"]
+        pad = node.kwargs["pad"]
 
     if not (
         isinstance(x, torch.fx.Node)
         and hasattr(x, "meta")
-        and "val" in x.meta
-        and isinstance(x.meta["val"], torch.Tensor)
-        and x.meta["val"].dim() >= 1
         and x.target in [aten.mul.Tensor, aten.mul_.Tensor]
         and isinstance(pad, (list, tuple))
         and len(pad) == 2
@@ -1534,6 +1541,20 @@ def is_valid_mul_trailing_constant_pad(match: Match):
         # TODO(jmaczan): make it more general, right now it works on 1D trailing pad
         # fixes https://github.com/pytorch/pytorch/issues/164041
     ):
+        return False
+
+    rank = None
+
+    if "val" in x.meta and isinstance(x.meta["val"], torch.Tensor):
+        rank = x.meta["val"].dim()
+    elif "tensor_meta" in x.meta and isinstance(
+        x.meta["tensor_meta"], torch.fx.passes.shape_prop.TensorMetadata
+    ):
+        rank = len(x.meta["tensor_meta"].shape)
+    else:
+        return False
+
+    if rank < 1:
         return False
 
     return True
@@ -1551,20 +1572,21 @@ def mul_pad_fusable_replacement(match: Match, self, pad, value):
     x = self
 
     def repl(x_tensor, pad, value):
-        shape = list(x_tensor.shape)
         pad_count = pad[-1]
-        pad_shape = shape.copy()
-        pad_shape[-1] = pad_count
 
-        new_pad = aten.full.default(
-            pad_shape,
+        size = list(x_tensor.shape)
+        size[-1] = pad_count
+
+        tail = aten.full(
+            size,
             value,
             dtype=x_tensor.dtype,
+            layout=x_tensor.layout,
             device=x_tensor.device,
             pin_memory=False,
         )
 
-        return aten.cat.default((x_tensor, new_pad), dim=-1)
+        return aten.cat.default((x_tensor, tail), dim=-1)
 
     # only replace the output node, not all nodes
     match.nodes = [match.output_node()]
