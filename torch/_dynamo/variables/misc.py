@@ -2134,3 +2134,25 @@ class WeakRefVariable(VariableTracker):
 
     def is_python_equal(self, other):
         return self.referent_vt.is_python_equal(other.referent_vt)
+
+
+class DatetimeClassVariable(VariableTracker):
+    """datetime.datetime"""
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+
+    def call_function(self, tx: "InstructionTranslator", args, kwargs):
+        if len(args) > 1 or kwargs:
+            unimplemented(
+                gb_type="random.Random() with improper arguments",
+                context=f"args: {args}, kwargs: {kwargs}",
+                explanation="random.Random() with > 1 arg or with kwargs is not supported.",
+                hints=[
+                    *graph_break_hints.USER_ERROR,
+                ],
+            )
+        seed = variables.ConstantVariable.create(None) if len(args) == 0 else args[0]
+        return RandomVariable(
+            seed=seed, mutation_type=variables.base.ValueMutationNew()
+        )

@@ -199,6 +199,24 @@ class RandomValueSource(Source):
 
 
 @dataclasses.dataclass(frozen=True)
+class DatetimeValueSource(Source):
+    datetime_call_index: int
+
+    def guard_source(self) -> GuardSource:
+        return GuardSource.DATETIME_VALUE
+
+    def reconstruct(self, codegen: "PyCodegen") -> None:
+        codegen.append_output(
+            codegen.create_load(codegen.tx.output.datetime_values_var)
+        )
+        codegen.append_output(codegen.create_load_const(self.datetime_call_index))
+        codegen.append_output(create_binary_subscr())
+
+    def name(self) -> str:
+        return f"datetime_value_{self.datetime_call_index}"
+
+
+@dataclasses.dataclass(frozen=True)
 class GlobalSource(Source):
     global_name: str
 

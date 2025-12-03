@@ -28,6 +28,7 @@ import builtins
 import collections
 import contextlib
 import dataclasses
+import datetime
 import enum
 import functools
 import inspect
@@ -64,6 +65,7 @@ from ..source import (
     AttrSource,
     CallFunctionNoArgsSource,
     DataclassFieldsSource,
+    DatetimeValueSource,
     DictGetItemSource,
     GetItemSource,
     RandomValueSource,
@@ -966,6 +968,19 @@ def call_random_fn(tx, fn, args, kwargs):
     return VariableBuilder(tx, source).wrap_unspecialized_primitive(example_value)
 
 
+def call_datetime_fn(tx, fn, args, kwargs):
+    # based on call_random_fn
+    from .builder import VariableBuilder
+
+    args = [x.as_python_constant() for x in args]
+    kwargs = {k: v.as_python_constant() for k, v in kwargs.items()}
+    datetime_call_index = len(tx.output.datetime_calls)
+    example_value = fn(*args, **kwargs)
+    source = DatetimeValueSource(datetime_call_index)
+    tx.output.datetime_calls.append((fn, args, kwargs))
+    return VariableBuilder(tx, source).wrap_unspecialized_primitive(example_value)
+
+
 class UserDefinedObjectVariable(UserDefinedVariable):
     """
     Mostly objects of defined type.  Catch-all for something where we only know the type.
@@ -1085,6 +1100,14 @@ class UserDefinedObjectVariable(UserDefinedVariable):
             random.randint,
             random.randrange,
             random.uniform,
+        }
+        return fns
+
+    @staticmethod
+    @functools.cache
+    def _supported_datetime_functions():
+        fns = {
+            datetime.datetime.now,
         }
         return fns
 
@@ -1258,6 +1281,13 @@ class UserDefinedObjectVariable(UserDefinedVariable):
             # TypeError: unhashable type
             return False
 
+    def is_supported_datetime(self):
+        try:
+            return self.value in self._supported_datetime_functions()
+        except TypeError:
+            # TypeError: unhashable type
+            return False
+
     def call_function(
         self,
         tx: "InstructionTranslator",
@@ -1270,6 +1300,12 @@ class UserDefinedObjectVariable(UserDefinedVariable):
             and all(v.is_python_constant() for v in kwargs.values())
         ):
             return call_random_fn(tx, self.value, args, kwargs)
+        elif (
+            self.is_supported_datetime()
+            and all(k.is_python_constant() for k in args)
+            and all(v.is_python_constant() for v in kwargs.values())
+        ):
+            return call_datetime_fn(tx, self.value, args, kwargs)
         elif istype(self.value, types.MethodType):
             func = self.value.__func__
             obj = self.value.__self__

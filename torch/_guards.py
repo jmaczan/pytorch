@@ -146,6 +146,7 @@ class GuardSource(enum.Enum):
     LOCAL_UNSPECIALIZED_BUILTIN_NN_MODULE = 14
     GLOBAL_UNSPECIALIZED_BUILTIN_NN_MODULE = 15
     TEMP_LOCAL = 16
+    DATETIME_VALUE = 17
 
     def is_fsdp_module(self) -> bool:
         return self in (GuardSource.GLOBAL_FSDP_MODULE, GuardSource.LOCAL_FSDP_MODULE)

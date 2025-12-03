@@ -105,6 +105,7 @@ from ..source import (
     ChainedSource,
     ConstDictKeySource,
     ConvertIntSource,
+    DatetimeValueSource,
     DictGetItemSource,
     DictSubclassGetItemSource,
     DynamicScalarSource,
@@ -2497,7 +2498,9 @@ class VariableBuilder:
             self.install_guards(GuardBuilder.CONSTANT_MATCH)
             return ConstantVariable.create(value=value, source=self.source)
 
-        assert not isinstance(self.get_source(), RandomValueSource)
+        assert not isinstance(
+            self.get_source(), (DatetimeValueSource, RandomValueSource)
+        )
         install_guard(self.get_source().make_guard(GuardBuilder.TYPE_MATCH))
 
         options = {"source": self.get_source()}
@@ -2583,7 +2586,9 @@ class VariableBuilder:
 
         # TODO: Switch RandomValueSource over to use this, this is more
         # accurate
-        assert not isinstance(self.get_source(), RandomValueSource)
+        assert not isinstance(
+            self.get_source(), (DatetimeValueSource, RandomValueSource)
+        )
         install_guard(self.get_source().make_guard(GuardBuilder.TYPE_MATCH))
 
         # The FloatTensorSource here is just for pedantic correctness: if you
@@ -2672,7 +2677,7 @@ class VariableBuilder:
             return self.tx.output.unspec_variable_map[self.name]
 
         wrapped_value = torch.tensor(value)
-        if not isinstance(self.get_source(), RandomValueSource):
+        if not isinstance(self.get_source(), (DatetimeValueSource, RandomValueSource)):
             install_guard(self.get_source().make_guard(GuardBuilder.TYPE_MATCH))
 
         options = {"source": self.get_source()}
