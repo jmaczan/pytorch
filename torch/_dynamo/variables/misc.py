@@ -2175,21 +2175,3 @@ class DatetimeClassVariable(VariableTracker):
             return datetime.datetime.now()
 
         return call_datetime_fn(tx, call_datetime_meth, args, kwargs)
-
-    def reconstruct(self, codegen: "PyCodegen"):
-        codegen.add_push_null(
-            lambda: codegen.extend_output(
-                [
-                    codegen.create_load_python_module(random),
-                    codegen.create_load_attr("Random"),
-                ]
-            )
-        )
-        codegen.call_function(0, False)
-        # NOTE using add_push_null may result in NULL being duplicated
-        # so defer the push_null to call_function
-        codegen.dup_top()
-        codegen.load_attr("setstate")
-        codegen(self.wrap_state(self.random.getstate()))
-        codegen.call_function(1, True)
-        codegen.pop_top()
