@@ -18,6 +18,7 @@ Key classes include:
 """
 
 import dataclasses
+import datetime
 import enum
 import functools
 import inspect
@@ -69,7 +70,12 @@ from .base import (
 )
 from .constant import ConstantVariable
 from .functions import NestedUserFunctionVariable, UserFunctionVariable
-from .user_defined import call_random_fn, is_standard_setattr, UserDefinedObjectVariable
+from .user_defined import (
+    call_datetime_fn,
+    call_random_fn,
+    is_standard_setattr,
+    UserDefinedObjectVariable,
+)
 
 
 if TYPE_CHECKING:
@@ -2137,22 +2143,53 @@ class WeakRefVariable(VariableTracker):
 
 
 class DatetimeClassVariable(VariableTracker):
-    """datetime.datetime"""
+    """datetime.datetime.now()"""
 
-    def __init__(self, **kwargs) -> None:
+    _nonvar_fields = {
+        *VariableTracker._nonvar_fields,
+    }
+
+    def __init__(
+        self,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
 
-    def call_function(self, tx: "InstructionTranslator", args, kwargs):
-        if len(args) > 1 or kwargs:
-            unimplemented(
-                gb_type="random.Random() with improper arguments",
-                context=f"args: {args}, kwargs: {kwargs}",
-                explanation="random.Random() with > 1 arg or with kwargs is not supported.",
-                hints=[
-                    *graph_break_hints.USER_ERROR,
-                ],
+    def python_type(self):
+        return datetime.datetime
+
+    def as_python_constant(self):
+        return datetime.datetime
+
+    def call_method(
+        self,
+        tx: "InstructionTranslator",
+        name,
+        args: list[VariableTracker],
+        kwargs: dict[str, VariableTracker],
+    ) -> VariableTracker:
+        if name != "now":
+            return super().call_method(tx, name, args, kwargs)
+
+        def call_datetime_meth(*args, **kwargs):
+            return datetime.datetime.now()
+
+        return call_datetime_fn(tx, call_datetime_meth, args, kwargs)
+
+    def reconstruct(self, codegen: "PyCodegen"):
+        codegen.add_push_null(
+            lambda: codegen.extend_output(
+                [
+                    codegen.create_load_python_module(random),
+                    codegen.create_load_attr("Random"),
+                ]
             )
-        seed = variables.ConstantVariable.create(None) if len(args) == 0 else args[0]
-        return RandomVariable(
-            seed=seed, mutation_type=variables.base.ValueMutationNew()
         )
+        codegen.call_function(0, False)
+        # NOTE using add_push_null may result in NULL being duplicated
+        # so defer the push_null to call_function
+        codegen.dup_top()
+        codegen.load_attr("setstate")
+        codegen(self.wrap_state(self.random.getstate()))
+        codegen.call_function(1, True)
+        codegen.pop_top()

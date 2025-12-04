@@ -24,6 +24,7 @@ import collections
 import contextlib
 import copy
 import dataclasses
+import datetime
 import enum
 import functools
 import inspect
@@ -233,6 +234,7 @@ from .misc import (
     AutogradFunctionContextVariable,
     AutogradFunctionVariable,
     ComptimeVariable,
+    DatetimeClassVariable,
     DebuggingVariable,
     DelayGraphBreakVariable,
     GetAttrVariable,
@@ -1333,6 +1335,8 @@ class VariableBuilder:
             result = RandomVariable(value, source=self.source)
             self.tx.output.side_effects.track_mutable(value, result)
             return result
+        elif value is datetime.datetime:
+            return DatetimeClassVariable
         # Don't use istype, since some python modules are not subclasses of types.ModuleType directly.
         # E.g, type(torch.ops) -> <class 'torch._ops._Ops'>,
         # type(torch.backends.cudnn) -> <class 'torch.backends.cudnn.CudnnModule'>
