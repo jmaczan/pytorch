@@ -1336,7 +1336,12 @@ class VariableBuilder:
             self.tx.output.side_effects.track_mutable(value, result)
             return result
         elif value is datetime.datetime:
-            return DatetimeClassVariable
+            self.install_guards(GuardBuilder.ID_MATCH)
+            return DatetimeClassVariable(source=self.source)
+        elif isinstance(value, datetime.datetime) and isinstance(
+            self.source, DatetimeValueSource
+        ):
+            return UserDefinedObjectVariable(value, source=self.source)
         # Don't use istype, since some python modules are not subclasses of types.ModuleType directly.
         # E.g, type(torch.ops) -> <class 'torch._ops._Ops'>,
         # type(torch.backends.cudnn) -> <class 'torch.backends.cudnn.CudnnModule'>

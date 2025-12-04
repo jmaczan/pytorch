@@ -259,6 +259,13 @@ def _get_gen_rand_values_fn(random_calls: Any) -> Callable[[], list[Any]]:
     return _gen_rand_values
 
 
+def _get_gen_datetime_values_fn(datetime_calls: Any) -> Callable[[], list[Any]]:
+    def _gen_datetime_values() -> list[Any]:
+        return [fn(*args, **kwargs) for fn, args, kwargs in datetime_calls]
+
+    return _gen_datetime_values
+
+
 class FakeRootModule(torch.nn.Module):
     """Trick the constructor of fx.GraphModule"""
 
@@ -704,6 +711,10 @@ class OutputGraph(OutputGraphCommon):
             tuple[Callable[..., object], tuple[object, ...], dict[str, object]]
         ] = []
         self.random_values_var: Any = None
+        self.datetime_calls: list[
+            tuple[Callable[..., object], tuple[object, ...], dict[str, object]]
+        ] = []
+        self.datetime_values_var: Any = None
 
         # Bytecode to insert right before we call the graph
         self.pregraph_bytecode: list[Instruction] = []
@@ -1553,6 +1564,26 @@ class OutputGraph(OutputGraphCommon):
                 codegen.create_store(self.random_values_var),
             )
             self.add_output_instructions(random_calls_instructions)
+
+        if len(self.datetime_calls) > 0:
+            datetime_calls_instructions = []
+            self.datetime_values_var = self.new_var("datetime_values")
+            dt_fn = disable(
+                _get_gen_datetime_values_fn(self.datetime_calls),
+                reason="do not trace into Dynamo datetime recovery function",
+            )
+            dt_fn_name = self.install_global("__gen_datetime_values", dt_fn)
+            codegen = PyCodegen(
+                self.root_tx, root, overridden_sources=overridden_sources
+            )
+            datetime_calls_instructions.extend(
+                codegen.load_function_name(dt_fn_name, True)
+            )
+            datetime_calls_instructions.extend(create_call_function(0, False))
+            datetime_calls_instructions.append(
+                codegen.create_store(self.datetime_values_var),
+            )
+            self.add_output_instructions(datetime_calls_instructions)
 
         # Codegen stack convention before the unsupported instruction
         # NOTE: in these comment blocks, "locals" EXCLUDE free and cell vars.

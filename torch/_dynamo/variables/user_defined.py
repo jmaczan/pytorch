@@ -976,9 +976,12 @@ def call_datetime_fn(tx, fn, args, kwargs):
     kwargs = {k: v.as_python_constant() for k, v in kwargs.items()}
     datetime_call_index = len(tx.output.datetime_calls)
     example_value = fn(*args, **kwargs)
+    assert isinstance(example_value, datetime.datetime)
+
     source = DatetimeValueSource(datetime_call_index)
     tx.output.datetime_calls.append((fn, args, kwargs))
-    return VariableBuilder(tx, source).wrap_unspecialized_primitive(example_value)
+
+    return VariableBuilder(tx, source)(example_value)
 
 
 class UserDefinedObjectVariable(UserDefinedVariable):
